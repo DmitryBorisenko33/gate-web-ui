@@ -119,6 +119,22 @@ export async function fetchMeta() {
   }
 }
 
+export async function fetchSystem() {
+  try {
+    const url = `${API_BASE}/system`;
+    console.log('[API] Fetching system info from:', url);
+    const res = await fetch(url);
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`GET /api/system failed: ${res.status} - ${text}`);
+    }
+    return await res.json();
+  } catch (e) {
+    console.error('[API] fetchSystem error:', e);
+    throw e;
+  }
+}
+
 export async function resetGate() {
   try {
     const url = `${API_BASE}/admin/reset`;

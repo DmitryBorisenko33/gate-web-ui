@@ -282,8 +282,11 @@
         backgroundColor: color + '22',
         borderWidth: 2,
         fill: true,
-        pointRadius: 0, // No points
-        pointHoverRadius: 0, // No points on hover
+        pointRadius: 2.5,
+        pointHoverRadius: 4,
+        pointHitRadius: 6,
+        pointBorderWidth: 0,
+        pointBackgroundColor: color,
       };
     }).filter(Boolean);
 
