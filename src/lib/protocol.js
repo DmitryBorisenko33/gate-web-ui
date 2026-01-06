@@ -48,7 +48,7 @@ export function parseExport(buf) {
   const recSize = dv.getUint16(6, true);
   if (magic !== MAGIC_HDR) throw new Error('Bad header magic');
   if (ver !== 2) throw new Error(`Unsupported version: ${ver}`);
-  if (recSize < 16) throw new Error(`Unexpected record_size: ${recSize}`);
+  if (recSize < 20) throw new Error(`Unexpected record_size: ${recSize}`);
 
   const footerOff = u8.byteLength - 20;
   const footerMagic = dv.getUint32(footerOff + 0, true);
@@ -80,6 +80,8 @@ export function parseExport(buf) {
     const recordId = readU64LEToNumber(dv, p);
     p += 8;
 
+    const timestampMs = readU64LEToNumber(dv, p);
+    p += 8;
     const sessionId = dv.getUint16(p, true);
     p += 2;
     const dtMs = dv.getUint32(p, true);
@@ -102,7 +104,7 @@ export function parseExport(buf) {
     // advance to next record: skip full payload area (40 bytes fixed)
     p += DB_RECORD_MAX_PAYLOAD_LEN;
 
-    items.push({recordId, sessionId, dtMs, mac, rssi, formatVersion, sensorTypeId, payloadLen, payload});
+    items.push({recordId, timestampMs, sessionId, dtMs, mac, rssi, formatVersion, sensorTypeId, payloadLen, payload});
   }
 
   return {items, footer: {count: n, crc32: crc32Footer, lastId}};

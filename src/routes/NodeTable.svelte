@@ -61,32 +61,31 @@
           sessionId: item.sessionId,
           dtMs: item.dtMs || 0,
           rssi: item.rssi,
-          values: values
+          timestampMs: item.timestampMs || 0,
+          values
         };
       });
       
       // Sort by recordId to ensure correct order
       rawItems.sort((a, b) => a.recordId - b.recordId);
       
-      // Calculate absolute timestamps from dtMs deltas (backward from last record)
-      // Use current time as anchor for the last record
+      // Calculate absolute timestamps: предпочитаем timestampMs (NTP), иначе восстанавливаем по dtMs
       const nowMs = Date.now();
       const decodedItems = [];
       if (rawItems.length > 0) {
         // Start from last record (most recent)
-        let currentTs = nowMs;
+        let currentTs = rawItems[rawItems.length - 1].timestampMs || nowMs;
         for (let i = rawItems.length - 1; i >= 0; i--) {
           const item = rawItems[i];
+          const ts = item.timestampMs && item.timestampMs > 0 ? item.timestampMs : currentTs;
           decodedItems.unshift({
             ...item,
-            sampleTsMs: currentTs
+            sampleTsMs: ts
           });
-          // Move backward by dtMs (delta from previous record)
           if (i > 0) {
             const prevItem = rawItems[i - 1];
-            // Add gap if session changed
             const gapMs = (item.sessionId !== prevItem.sessionId) ? 60000 : 0;
-            currentTs = currentTs - item.dtMs - gapMs;
+            currentTs = ts - item.dtMs - gapMs;
           }
         }
       }

@@ -46,3 +46,4 @@ npm run build
 - `GET /api/schema?type={sensorTypeId}` - схема сенсора
 
 
+
