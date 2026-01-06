@@ -9,10 +9,9 @@ function getGateIP() {
     // Default gate IP for development
     return '192.168.88.77';
   }
-  // In production, use URL param or current hostname
-  const params = new URLSearchParams(window.location.search);
-  const gateIP = params.get('gate') || window.location.hostname;
-  return gateIP;
+  // In production, always use current hostname (the gate's IP when served from the gate)
+  // window.location.hostname will be the IP of the ESP32 gate
+  return window.location.hostname;
 }
 
 const API_BASE = `http://${getGateIP()}:8081/api`;

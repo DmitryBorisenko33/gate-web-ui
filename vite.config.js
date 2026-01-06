@@ -21,7 +21,9 @@ export default defineConfig({
           return 'assets/[name]-[hash][extname]';
         }
       }
-    }
+    },
+    // Use esbuild for minification (default, faster than terser)
+    minify: 'esbuild'
   }
 });
 

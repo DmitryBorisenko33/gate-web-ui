@@ -3,170 +3,97 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { gzipSync } from 'zlib';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const distDir = path.join(__dirname, 'dist');
-const outputFile = path.join(__dirname, '../nrf-esp32-gate-idf/main/web_ui.c');
 
-// Read built files
+// Check if dist exists
+if (!fs.existsSync(distDir)) {
+  console.error('Error: dist/ directory not found. Run "npm run build" first.');
+  process.exit(1);
+}
+
+// Verify required files exist
 const htmlFile = path.join(distDir, 'index.html');
-
 if (!fs.existsSync(htmlFile)) {
   console.error('Error: dist/index.html not found. Run "npm run build" first.');
   process.exit(1);
 }
 
+// Find JS and CSS files
 let html = fs.readFileSync(htmlFile, 'utf-8');
 
-// Find JS and CSS files from HTML or assets directory
-let js = '';
-let css = '';
-
-// Extract JS file path from HTML
+// Extract and verify JS file
 const jsMatch = html.match(/<script[^>]+src=["']([^"']+\.js)["']/);
-if (jsMatch) {
-  const jsPath = jsMatch[1];
-  // Try absolute path first (from dist root)
-  let jsFilePath = path.join(distDir, jsPath.replace(/^\//, ''));
-  if (!fs.existsSync(jsFilePath)) {
-    // Try relative to HTML file
-    jsFilePath = path.join(path.dirname(htmlFile), jsPath);
-  }
-  if (fs.existsSync(jsFilePath)) {
-    js = fs.readFileSync(jsFilePath, 'utf-8');
-    // Update HTML to reference /app.js
-    html = html.replace(jsPath, '/app.js');
-  }
-}
-
-// Extract CSS file path from HTML
-const cssMatch = html.match(/<link[^>]+href=["']([^"']+\.css)["']/);
-if (cssMatch) {
-  const cssPath = cssMatch[1];
-  // Try absolute path first (from dist root)
-  let cssFilePath = path.join(distDir, cssPath.replace(/^\//, ''));
-  if (!fs.existsSync(cssFilePath)) {
-    // Try relative to HTML file
-    cssFilePath = path.join(path.dirname(htmlFile), cssPath);
-  }
-  if (fs.existsSync(cssFilePath)) {
-    css = fs.readFileSync(cssFilePath, 'utf-8');
-    // Update HTML to reference /app.css
-    html = html.replace(cssPath, '/app.css');
-  }
-}
-
-// Fallback: try to find app.js and app.css in dist root
-if (!js) {
-  const jsFile = path.join(distDir, 'app.js');
-  if (fs.existsSync(jsFile)) {
-    js = fs.readFileSync(jsFile, 'utf-8');
-  }
-}
-
-if (!css) {
-  const cssFile = path.join(distDir, 'app.css');
-  if (fs.existsSync(cssFile)) {
-    css = fs.readFileSync(cssFile, 'utf-8');
-  }
-}
-
-if (!js || !css) {
-  console.error('Error: JS or CSS files not found in dist. Run "npm run build" first.');
+if (!jsMatch) {
+  console.error('Error: No JS file found in HTML');
   process.exit(1);
 }
 
-// Escape C string
-function escapeCString(str) {
-  return str
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
-    .replace(/\t/g, '\\t');
+const jsPath = jsMatch[1];
+let jsFilePath = path.join(distDir, jsPath.replace(/^\//, ''));
+if (!fs.existsSync(jsFilePath)) {
+  jsFilePath = path.join(path.dirname(htmlFile), jsPath);
 }
 
-// Split into chunks to avoid compiler limits
-function splitIntoChunks(str, chunkSize = 8000) {
-  const chunks = [];
-  for (let i = 0; i < str.length; i += chunkSize) {
-    chunks.push(str.slice(i, i + chunkSize));
-  }
-  return chunks;
+if (!fs.existsSync(jsFilePath)) {
+  console.error(`Error: JS file not found: ${jsPath}`);
+  process.exit(1);
 }
 
-const htmlEscaped = escapeCString(html);
-const jsEscaped = escapeCString(js);
-const cssEscaped = escapeCString(css);
-
-const htmlChunks = splitIntoChunks(htmlEscaped);
-const jsChunks = splitIntoChunks(jsEscaped);
-const cssChunks = splitIntoChunks(cssEscaped);
-
-// Generate C code
-let cCode = `#include "web_ui.h"
-
-/* Auto-generated from web build - do not edit manually */
-/* Generated from: ${new Date().toISOString()} */
-
-`;
-
-// HTML
-cCode += `static const char s_html[] = `;
-htmlChunks.forEach((chunk, i) => {
-  if (i === 0) {
-    cCode += `"${chunk}"`;
-  } else {
-    cCode += `\n    "${chunk}"`;
-  }
-});
-cCode += `;\n\n`;
-
-// JS
-cCode += `static const char s_js[] = `;
-jsChunks.forEach((chunk, i) => {
-  if (i === 0) {
-    cCode += `"${chunk}"`;
-  } else {
-    cCode += `\n    "${chunk}"`;
-  }
-});
-cCode += `;\n\n`;
-
-// CSS
-cCode += `static const char s_css[] = `;
-cssChunks.forEach((chunk, i) => {
-  if (i === 0) {
-    cCode += `"${chunk}"`;
-  } else {
-    cCode += `\n    "${chunk}"`;
-  }
-});
-cCode += `;\n\n`;
-
-// Functions
-cCode += `const char *web_ui_get_html(void)
-{
-    return s_html;
+// Extract and verify CSS file
+const cssMatch = html.match(/<link[^>]+href=["']([^"']+\.css)["']/);
+if (!cssMatch) {
+  console.error('Error: No CSS file found in HTML');
+  process.exit(1);
 }
 
-const char *web_ui_get_js(void)
-{
-    return s_js;
+const cssPath = cssMatch[1];
+let cssFilePath = path.join(distDir, cssPath.replace(/^\//, ''));
+if (!fs.existsSync(cssFilePath)) {
+  cssFilePath = path.join(path.dirname(htmlFile), cssPath);
 }
 
-const char *web_ui_get_css(void)
-{
-    return s_css;
+if (!fs.existsSync(cssFilePath)) {
+  console.error(`Error: CSS file not found: ${cssPath}`);
+  process.exit(1);
 }
-`;
 
-// Write output
-fs.writeFileSync(outputFile, cCode, 'utf-8');
-console.log(`✓ Generated ${outputFile}`);
-console.log(`  HTML: ${html.length} bytes (${htmlChunks.length} chunks)`);
-console.log(`  JS: ${js.length} bytes (${jsChunks.length} chunks)`);
-console.log(`  CSS: ${css.length} bytes (${cssChunks.length} chunks)`);
+// Update HTML to use absolute paths for SPIFFS
+html = html.replace(jsPath, '/app.js');
+html = html.replace(cssPath, '/app.css');
 
+// Write updated HTML back to dist
+fs.writeFileSync(htmlFile, html, 'utf-8');
+
+// Copy JS and CSS to root of dist with fixed names (if they're not already there)
+const appJsPath = path.join(distDir, 'app.js');
+const appCssPath = path.join(distDir, 'app.css');
+
+if (jsFilePath !== appJsPath) {
+  fs.copyFileSync(jsFilePath, appJsPath);
+}
+if (cssFilePath !== appCssPath) {
+  fs.copyFileSync(cssFilePath, appCssPath);
+}
+
+// Create gzip versions for better compression
+const jsContent = fs.readFileSync(appJsPath);
+const cssContent = fs.readFileSync(appCssPath);
+const htmlContent = fs.readFileSync(htmlFile);
+
+const jsGzip = gzipSync(jsContent, { level: 9 });
+const cssGzip = gzipSync(cssContent, { level: 9 });
+const htmlGzip = gzipSync(htmlContent, { level: 9 });
+
+fs.writeFileSync(path.join(distDir, 'app.js.gz'), jsGzip);
+fs.writeFileSync(path.join(distDir, 'app.css.gz'), cssGzip);
+fs.writeFileSync(path.join(distDir, 'index.html.gz'), htmlGzip);
+
+console.log('✓ Web files prepared for SPIFFS:');
+console.log(`  HTML: ${htmlFile} (${fs.statSync(htmlFile).size} bytes, gzip: ${htmlGzip.length} bytes)`);
+console.log(`  JS: ${appJsPath} (${fs.statSync(appJsPath).size} bytes, gzip: ${jsGzip.length} bytes)`);
+console.log(`  CSS: ${appCssPath} (${fs.statSync(appCssPath).size} bytes, gzip: ${cssGzip.length} bytes)`);
