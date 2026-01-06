@@ -1,3 +1,5 @@
+import { parseExport } from './protocol.js';
+
 // Get gate IP from environment variable, URL params, or use current hostname
 function getGateIP() {
   // In dev mode, use VITE_GATE_IP env var or default to 192.168.88.77
@@ -44,7 +46,18 @@ export async function fetchNodeData(mac, limit = 200, offset = 0) {
       const text = await res.text();
       throw new Error(`GET /api/nodes/${mac}/data failed: ${res.status} - ${text}`);
     }
-    return await res.json();
+    
+    // Get binary data
+    const buf = await res.arrayBuffer();
+    const parsed = parseExport(buf);
+    
+    // Return structure compatible with existing code
+    return {
+      items: parsed.items,
+      total: parsed.footer.count,
+      hasMore: parsed.footer.count === limit,
+      lastId: parsed.footer.lastId
+    };
   } catch (e) {
     console.error('[API] fetchNodeData error:', e);
     throw e;

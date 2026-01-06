@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { fetchNodeData, fetchSchema } from '../lib/api.js';
   import { formatTs, formatValue } from '../lib/utils.js';
+  import { decodePayload } from '../lib/payload-decoder.js';
   import { Chart, registerables } from 'chart.js';
   import 'chartjs-adapter-date-fns';
 
@@ -49,17 +50,52 @@
   }
 
   async function loadData() {
-    if (!mac || selectedFields.length === 0) return;
+    if (!mac || !schema || selectedFields.length === 0) return;
     try {
       loading = true;
       error = null;
       const data = await fetchNodeData(mac, limit, offset);
       console.log('[NodeGraph] Data loaded:', { itemsCount: data.items?.length, firstItem: data.items?.[0] });
-      // Use recordId as timestamp if sampleTsMs is 0
-      const items = (data.items || []).map(item => ({
-        ...item,
-        sampleTsMs: item.sampleTsMs || item.recordId * 1000
-      }));
+      
+      // Decode payload for each item
+      const rawItems = (data.items || []).map(item => {
+        const values = decodePayload(item.payload, schema);
+        return {
+          recordId: item.recordId,
+          sessionId: item.sessionId,
+          dtMs: item.dtMs || 0,
+          rssi: item.rssi,
+          values: values
+        };
+      });
+      
+      // Sort by recordId to ensure correct order
+      rawItems.sort((a, b) => a.recordId - b.recordId);
+      
+      // Calculate absolute timestamps from dtMs deltas (backward from last record)
+      // Use current time as anchor for the last record
+      const nowMs = Date.now();
+      const items = [];
+      if (rawItems.length > 0) {
+        // Start from last record (most recent)
+        let currentTs = nowMs;
+        for (let i = rawItems.length - 1; i >= 0; i--) {
+          const item = rawItems[i];
+          items.unshift({
+            ...item,
+            sampleTsMs: currentTs
+          });
+          // Move backward by dtMs (delta from previous record)
+          if (i > 0) {
+            const prevItem = rawItems[i - 1];
+            // Add gap if session changed
+            const gapMs = (item.sessionId !== prevItem.sessionId) ? 60000 : 0;
+            currentTs = currentTs - item.dtMs - gapMs;
+          }
+        }
+      }
+      
+      console.log('[NodeGraph] First item (decoded):', items[0]);
       updateChart(items);
     } catch (e) {
       error = e.message;

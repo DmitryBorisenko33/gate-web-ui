@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { fetchNodeData, fetchSchema } from '../lib/api.js';
   import { formatTs, formatValue } from '../lib/utils.js';
+  import { decodePayload } from '../lib/payload-decoder.js';
 
   export let navigate;
   export let params = {};
@@ -22,8 +23,15 @@
   onMount(async () => {
     console.log('[NodeTable] onMount, mac:', mac, 'deviceId:', deviceId);
     await loadSchema();
-    await loadData();
+    if (schema) {
+      await loadData();
+    }
   });
+  
+  // Reload data when schema becomes available (reactive statement)
+  $: if (schema && mac && rows.length === 0 && !loading) {
+    loadData();
+  }
 
   async function loadSchema() {
     if (!deviceId) return;
@@ -37,17 +45,58 @@
   }
 
   async function loadData() {
-    if (!mac) return;
+    if (!mac || !schema) return;
     try {
       loading = true;
       error = null;
       const data = await fetchNodeData(mac, limit, offset);
       console.log('[NodeTable] Data loaded:', { itemsCount: data.items?.length, hasMore: data.hasMore, offset });
-      console.log('[NodeTable] First item:', data.items?.[0]);
+      console.log('[NodeTable] First item (raw):', data.items?.[0]);
+      
+      // Decode payload for each item
+      const rawItems = (data.items || []).map(item => {
+        const values = decodePayload(item.payload, schema);
+        return {
+          recordId: item.recordId,
+          sessionId: item.sessionId,
+          dtMs: item.dtMs || 0,
+          rssi: item.rssi,
+          values: values
+        };
+      });
+      
+      // Sort by recordId to ensure correct order
+      rawItems.sort((a, b) => a.recordId - b.recordId);
+      
+      // Calculate absolute timestamps from dtMs deltas (backward from last record)
+      // Use current time as anchor for the last record
+      const nowMs = Date.now();
+      const decodedItems = [];
+      if (rawItems.length > 0) {
+        // Start from last record (most recent)
+        let currentTs = nowMs;
+        for (let i = rawItems.length - 1; i >= 0; i--) {
+          const item = rawItems[i];
+          decodedItems.unshift({
+            ...item,
+            sampleTsMs: currentTs
+          });
+          // Move backward by dtMs (delta from previous record)
+          if (i > 0) {
+            const prevItem = rawItems[i - 1];
+            // Add gap if session changed
+            const gapMs = (item.sessionId !== prevItem.sessionId) ? 60000 : 0;
+            currentTs = currentTs - item.dtMs - gapMs;
+          }
+        }
+      }
+      
+      console.log('[NodeTable] First item (decoded):', decodedItems[0]);
+      
       if (offset === 0) {
-        rows = data.items || [];
+        rows = decodedItems;
       } else {
-        rows = [...rows, ...(data.items || [])];
+        rows = [...rows, ...decodedItems];
       }
       hasMore = data.hasMore || false;
       console.log('[NodeTable] Rows count:', rows.length);
