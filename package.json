@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && node build.js",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "node deploy.js"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^3.0.0",
