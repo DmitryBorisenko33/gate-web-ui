@@ -97,8 +97,9 @@
   <SuccessMessage message={message} />
 
   <!-- System Information -->
-  <Card padding="medium" class="system-info-card">
-    <h2 class="card-title">Системная информация</h2>
+  <div class="system-info-card">
+    <Card padding="medium">
+      <h2 class="card-title">Системная информация</h2>
     {#if systemLoading}
       <LoadingSpinner size="small" text="Загрузка..." />
     {:else if systemInfo}
@@ -157,10 +158,12 @@
     {:else if !systemLoading}
       <ErrorMessage message="Не удалось загрузить информацию" />
     {/if}
-  </Card>
+    </Card>
+  </div>
 
   <!-- Factory Reset -->
-  <Card padding="medium" class="reset-card">
+  <div class="reset-card">
+    <Card padding="medium">
     <h2 class="card-title">Сброс данных</h2>
     <p class="card-description">
       Удаляет всю базу TSDB на гейте и сбрасывает счетчик session_id на 1. Действие необратимо.
@@ -172,7 +175,8 @@
     >
       {loading ? 'Выполняю...' : 'Сбросить базу и счетчик'}
     </Button>
-  </Card>
+    </Card>
+  </div>
 </div>
 
 <style>
@@ -194,7 +198,11 @@
     margin-bottom: 1rem;
   }
 
-  .system-info-card,
+  .system-info-card {
+    max-width: 42rem;
+    margin-bottom: 2rem;
+  }
+
   .reset-card {
     max-width: 42rem;
     margin-bottom: 1rem;
