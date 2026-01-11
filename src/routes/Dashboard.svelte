@@ -1,21 +1,22 @@
 <script>
   import { onMount } from 'svelte';
   import { push } from 'svelte-spa-router';
-  import { fetchNodes } from '../lib/api.js';
+  import { fetchNodes, deleteNode } from '../lib/api.js';
   import { formatTs, formatValue } from '../lib/utils.js';
+  import { Table, TrendingUp, Trash2 } from 'lucide-svelte';
   import {
     PageTitle,
     LoadingSpinner,
     ErrorMessage,
     EmptyState,
     Card,
-    Button,
     Grid
   } from '../components/ui';
 
   let nodes = [];
   let loading = true;
   let error = null;
+  let deletingMac = null; // Track which node is being deleted
 
   onMount(async () => {
     try {
@@ -42,6 +43,29 @@
     event.stopPropagation();
     console.log('[Dashboard] Navigate to graph:', { mac, deviceId: sensorTypeId });
     push(`/graph/${mac}/${sensorTypeId}`);
+  }
+
+  async function handleDeleteClick(mac, event) {
+    event.stopPropagation();
+    
+    // Confirm deletion
+    if (!confirm(`Delete node ${mac} and all its data? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      deletingMac = mac;
+      await deleteNode(mac);
+      // Remove node from local list
+      nodes = nodes.filter(n => n.mac !== mac);
+      console.log('[Dashboard] Node deleted:', mac);
+    } catch (e) {
+      error = e.message || String(e);
+      console.error('[Dashboard] Error deleting node:', e);
+      alert(`Failed to delete node: ${error}`);
+    } finally {
+      deletingMac = null;
+    }
   }
 </script>
 
@@ -74,20 +98,28 @@
             {/if}
           {/if}
           <div class="node-actions">
-            <Button
-              size="small"
-              fullWidth={true}
+            <button
+              class="action-icon"
+              title="Table"
               on:click={(e) => handleTableClick(node.mac, node.sensorTypeId, e)}
             >
-              Table
-            </Button>
-            <Button
-              size="small"
-              fullWidth={true}
+              <Table size={20} />
+            </button>
+            <button
+              class="action-icon"
+              title="Graph"
               on:click={(e) => handleGraphClick(node.mac, node.sensorTypeId, e)}
             >
-              Graph
-            </Button>
+              <TrendingUp size={20} />
+            </button>
+            <button
+              class="action-icon action-icon-danger"
+              title="Delete node and all data"
+              on:click={(e) => handleDeleteClick(node.mac, e)}
+              disabled={deletingMac === node.mac}
+            >
+              <Trash2 size={20} />
+            </button>
           </div>
         </Card>
       {/each}
@@ -134,5 +166,44 @@
     display: flex;
     gap: 0.5rem;
     margin-top: 0.75rem;
+    justify-content: center;
+  }
+
+  .action-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    background: #1f2b4b;
+    color: #c6d1f0;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .action-icon:hover {
+    background: #2f6df6;
+    color: #ffffff;
+  }
+
+  .action-icon:active {
+    transform: scale(0.95);
+  }
+
+  .action-icon:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .action-icon-danger {
+    background: #1f2b4b;
+  }
+
+  .action-icon-danger:hover {
+    background: #e91e63;
+    color: #ffffff;
   }
 </style>

@@ -92,6 +92,25 @@ export async function fetchNodeLatest(mac) {
   }
 }
 
+export async function deleteNode(mac) {
+  try {
+    // Do not encode ':' so it matches /api/nodes/<mac> on the gate
+    const url = `${API_BASE}/nodes/${mac}`;
+    console.log('[API] Deleting node:', url);
+    const res = await fetch(url, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`DELETE /api/nodes/${mac} failed: ${res.status} - ${text}`);
+    }
+    return await res.json();
+  } catch (e) {
+    console.error('[API] deleteNode error:', e);
+    throw e;
+  }
+}
+
 export async function fetchSchema(sensorTypeId) {
   try {
     const url = `${API_BASE}/schema?type=${sensorTypeId}`;

@@ -43,18 +43,14 @@
   let loading = false;
   let error = null;
   // Постраничная навигация по записям (новые справа)
-  // TEMPORARY: Set to 12 records per page for testing pagination with small database
-  // TODO: Restore dynamic calculation for 24 hours when database has enough data
+  // Calculate page size to show 24 hours of data
   function calculatePageSize(intervalMs) {
-    // Temporary: return 12 for testing
-    return 12;
-    // Original calculation (commented out for now):
-    // if (intervalMs <= 0) return 3000; // fallback
-    // const hoursPerPage = 24;
-    // const msPerPage = hoursPerPage * 60 * 60 * 1000; // 24 hours in ms
-    // return Math.ceil(msPerPage / intervalMs);
+    if (intervalMs <= 0) return 3000; // fallback
+    const hoursPerPage = 24;
+    const msPerPage = hoursPerPage * 60 * 60 * 1000; // 24 hours in ms
+    return Math.ceil(msPerPage / intervalMs);
   }
-  let pageSize = 12; // TEMPORARY: set to 12 for testing
+  let pageSize = 3000; // Initial value, will be recalculated based on interval_ms
   let pageIndex = 0; // 0 = самая новая страница
   let totalPages = 1;
   let cachedItems = []; // данные текущей страницы
