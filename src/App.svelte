@@ -87,7 +87,7 @@
       icon={LayoutDashboard}
       onClick={() => navigateTo('/dashboard')}
     >
-      Дашборд
+        Дашборд
     </SidebarNavItem>
     <SidebarNavItem
       path="/settings"
@@ -96,7 +96,7 @@
       icon={Settings}
       onClick={() => navigateTo('/settings')}
     >
-      Настройки
+        Настройки
     </SidebarNavItem>
   </Sidebar>
 

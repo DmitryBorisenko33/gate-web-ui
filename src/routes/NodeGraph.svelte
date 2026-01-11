@@ -1,5 +1,5 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { fetchNodeData, fetchSchema, fetchMeta } from '../lib/api.js';
   import { formatTs, formatValue } from '../lib/utils.js';
   import { decodePayload } from '../lib/payload-decoder.js';
@@ -43,7 +43,18 @@
   let loading = false;
   let error = null;
   // Постраничная навигация по записям (новые справа)
-  const pageSize = 3000;
+  // TEMPORARY: Set to 12 records per page for testing pagination with small database
+  // TODO: Restore dynamic calculation for 24 hours when database has enough data
+  function calculatePageSize(intervalMs) {
+    // Temporary: return 12 for testing
+    return 12;
+    // Original calculation (commented out for now):
+    // if (intervalMs <= 0) return 3000; // fallback
+    // const hoursPerPage = 24;
+    // const msPerPage = hoursPerPage * 60 * 60 * 1000; // 24 hours in ms
+    // return Math.ceil(msPerPage / intervalMs);
+  }
+  let pageSize = 12; // TEMPORARY: set to 12 for testing
   let pageIndex = 0; // 0 = самая новая страница
   let totalPages = 1;
   let cachedItems = []; // данные текущей страницы
@@ -130,6 +141,10 @@
       loading = true;
       error = null;
 
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:127',message:'loadPage entry',data:{pageIdx,hasMac:!!mac,hasSchema:!!schema,hasMeta:!!meta,selectedFieldsCount:selectedFields.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+
       // Обновляем meta перед запросом
       meta = await fetchMeta();
       intervalMs = meta.interval_ms || 0;
@@ -139,9 +154,17 @@
         return;
       }
 
+      // Recalculate pageSize to always show 24 hours
+      pageSize = calculatePageSize(intervalMs);
+
       const nowMs = Date.now();
-      const recordsRange = meta.head_id - meta.oldest_id + 1;
-      totalPages = Math.max(1, Math.ceil(recordsRange / pageSize));
+      
+      // Calculate hours per page (should be ~24 hours)
+      const hoursPerPage = (pageSize * intervalMs) / (1000 * 60 * 60);
+
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:162',message:'loadPage before fetch',data:{head_id:meta.head_id,oldest_id:meta.oldest_id,currentTotalPages:totalPages,pageSize,intervalMs,hoursPerPage,requestedPageIdx:pageIdx},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
 
       // Клайп pageIdx в допустимые границы
       if (pageIdx < 0) pageIdx = 0;
@@ -149,7 +172,54 @@
       pageIndex = pageIdx;
 
       const offset = pageIndex * pageSize;
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:184',message:'before fetchNodeData',data:{pageIndex,offset,pageSize,mac},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+
       const data = await fetchNodeData(mac, pageSize, offset);
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:190',message:'after fetchNodeData',data:{pageIndex,offset,itemsCount:data.items?.length,hasMore:data.hasMore,total:data.total,lastId:data.lastId,firstRecordId:data.items?.[0]?.recordId,lastRecordId:data.items?.[data.items?.length-1]?.recordId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      
+      // Calculate totalPages from total records for this MAC (from first request)
+      if (data.total && data.total > 0) {
+        totalPages = Math.max(1, Math.ceil(data.total / pageSize));
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:196',message:'totalPages calculated from API',data:{totalRecords:data.total,pageSize,totalPages},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+      }
+      
+      // Adjust totalPages based on actual API response (fallback if total not available)
+      // Priority: empty page > hasMore=false > hasMore=true
+      if (data.items && data.items.length === 0) {
+        // No data on this page - this page is beyond available data
+        // Last page with data was pageIndex - 1, so totalPages = pageIndex
+        totalPages = Math.max(1, pageIndex);
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:198',message:'adjusting totalPages - no data on page',data:{pageIndex,newTotalPages:totalPages,itemsCount:0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+      } else if (!data.hasMore) {
+        // No more data available - this is the last page with data
+        // pageIndex is 0-based, so if pageIndex=4 is last, totalPages should be 5 (pages 0,1,2,3,4)
+        totalPages = pageIndex + 1;
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:204',message:'adjusting totalPages - last page (hasMore=false)',data:{pageIndex,hasMore:data.hasMore,itemsCount:data.items?.length,newTotalPages:totalPages},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+      } else if (data.hasMore) {
+        // There's more data available
+        // If we're at or beyond current totalPages estimate, increase it
+        if (pageIndex >= totalPages - 1) {
+          totalPages = pageIndex + 2; // At least one more page
+          // #region agent log
+          fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:212',message:'adjusting totalPages - more data available',data:{pageIndex,hasMore:data.hasMore,itemsCount:data.items?.length,newTotalPages:totalPages},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
+        }
+        // Ensure totalPages is at least pageIndex + 1 (current page + at least one more)
+        totalPages = Math.max(totalPages, pageIndex + 1);
+      }
+
       console.log('[NodeGraph] Загружена страница:', { pageIndex, offset, items: data.items?.length });
 
       // Декодируем payload
@@ -171,11 +241,16 @@
 
       // Anchor: newest запись этой страницы относительно head_id
       const newestRecordId = rawItems.length > 0 ? Math.max(...rawItems.map(item => item.recordId)) : 0;
+      const oldestRecordId = rawItems.length > 0 ? Math.min(...rawItems.map(item => item.recordId)) : 0;
       let anchorTime = nowMs;
       if (newestRecordId > 0 && meta.head_id) {
         const recordsFromHead = meta.head_id - newestRecordId;
         anchorTime = nowMs - recordsFromHead * intervalMs;
       }
+
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:175',message:'time reconstruction anchor',data:{pageIndex,newestRecordId,oldestRecordId,head_id:meta.head_id,recordsFromHead:meta.head_id-newestRecordId,anchorTime:new Date(anchorTime).toISOString(),nowMs:new Date(nowMs).toISOString(),intervalMs},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
 
       const items = [];
 
@@ -241,7 +316,11 @@
       }
 
       cachedItems = items;
-      updateChart(items);
+      // Chart will be updated by reactive statement when chartCanvas is ready
+      // But also try to update immediately if chartCanvas is already bound
+      if (chartCanvas) {
+        updateChart(items);
+      }
     } catch (e) {
       error = e.message;
       console.error('[NodeGraph] Error loading data:', e);
@@ -251,8 +330,15 @@
   }
 
   function updateChart(items) {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:301',message:'updateChart entry',data:{hasChartCanvas:!!chartCanvas,hasSchema:!!schema,itemsCount:items?.length,selectedFieldsCount:selectedFields?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+    // #endregion
+    
     if (!chartCanvas || !schema) {
       console.log('[NodeGraph] Cannot update chart:', { chartCanvas: !!chartCanvas, schema: !!schema });
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:303',message:'updateChart blocked',data:{hasChartCanvas:!!chartCanvas,hasSchema:!!schema},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+      // #endregion
       return;
     }
 
@@ -299,12 +385,19 @@
 
     if (datasets.length === 0) {
       console.warn('[NodeGraph] No valid datasets');
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:348',message:'updateChart no datasets',data:{itemsCount:items?.length,selectedFields,datasetsLength:datasets.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+      // #endregion
       return;
     }
 
     if (chart) {
       chart.destroy();
     }
+
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:357',message:'updateChart creating chart',data:{datasetsCount:datasets.length,chartCanvasExists:!!chartCanvas},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+    // #endregion
 
     chart = new Chart(chartCanvas, {
       type: 'line',
@@ -317,8 +410,17 @@
             type: 'time',
             time: {
               displayFormats: {
-                minute: 'MM/dd HH:mm',
+                millisecond: 'HH:mm:ss.SSS',
+                second: 'HH:mm:ss',
+                minute: 'HH:mm',
+                hour: 'HH:mm',
+                day: 'dd.MM HH:mm',
+                week: 'dd.MM',
+                month: 'MMM yyyy',
+                quarter: 'MMM yyyy',
+                year: 'yyyy',
               },
+              tooltipFormat: 'dd.MM.yyyy HH:mm:ss',
             },
             ticks: {
               color: '#c6d1f0',
@@ -348,6 +450,9 @@
     });
 
     console.log('[NodeGraph] Chart created successfully');
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:416',message:'updateChart chart created',data:{chartExists:!!chart,datasetsCount:datasets.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+    // #endregion
   }
 
   function toggleField(fieldKey) {
@@ -364,20 +469,29 @@
 
   // Переход к более старой странице
   async function prevPage() {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:366',message:'prevPage called',data:{currentPageIndex:pageIndex,totalPages,willLoadPage:pageIndex+1,canLoad:pageIndex<totalPages-1},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
     if (pageIndex >= totalPages - 1) return;
     await loadPage(pageIndex + 1);
   }
 
   // Переход к более новой странице
   async function nextPage() {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:373',message:'nextPage called',data:{currentPageIndex:pageIndex,totalPages,willLoadPage:pageIndex-1,canLoad:pageIndex>0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
     if (pageIndex <= 0) return;
     await loadPage(pageIndex - 1);
   }
 
   // Reactive statement to update chart when selectedFields change
   // Data is already filtered by day on the server, so we just need to update when fields change
-  $: if (cachedItems.length > 0 && schema && selectedFields.length > 0) {
-    updateChart(cachedItems);
+  $: if (cachedItems.length > 0 && schema && selectedFields.length > 0 && chartCanvas) {
+    // Use tick to ensure chartCanvas is bound to DOM
+    tick().then(() => {
+      updateChart(cachedItems);
+    });
   }
 </script>
 

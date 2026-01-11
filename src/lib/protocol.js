@@ -50,12 +50,13 @@ export function parseExport(buf) {
   if (ver !== 2) throw new Error(`Unsupported version: ${ver}`);
   if (recSize < 20) throw new Error(`Unexpected record_size: ${recSize}`);
 
-  const footerOff = u8.byteLength - 20;
+  const footerOff = u8.byteLength - 24; // Footer is now 24 bytes (added totalRecordsForMac)
   const footerMagic = dv.getUint32(footerOff + 0, true);
   if (footerMagic !== MAGIC_FOOTER) throw new Error('Bad footer magic');
   const count = dv.getUint32(footerOff + 4, true);
   const crc32Footer = dv.getUint32(footerOff + 8, true) >>> 0;
   const lastId = readU64LEToNumber(dv, footerOff + 12);
+  const totalRecordsForMac = dv.getUint32(footerOff + 20, true); // New field at offset 20
 
   const itemsOff = 8;
   const itemsLen = footerOff - itemsOff;
@@ -107,6 +108,6 @@ export function parseExport(buf) {
     items.push({recordId, timestampMs, sessionId, dtMs, mac, rssi, formatVersion, sensorTypeId, payloadLen, payload});
   }
 
-  return {items, footer: {count: n, crc32: crc32Footer, lastId}};
+  return {items, footer: {count: n, crc32: crc32Footer, lastId, totalRecordsForMac}};
 }
 

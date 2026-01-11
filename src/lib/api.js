@@ -37,6 +37,9 @@ export async function fetchNodes() {
 
 export async function fetchNodeData(mac, limit = 200, offset = 0) {
   try {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.js:38',message:'fetchNodeData entry',data:{mac,limit,offset},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     // Do not encode ':' so it matches /api/nodes/<mac>/data on the gate
     const url = `${API_BASE}/nodes/${mac}/data?limit=${limit}&offset=${offset}`;
     console.log('[API] Fetching node data from:', url);
@@ -55,10 +58,14 @@ export async function fetchNodeData(mac, limit = 200, offset = 0) {
     const buf = await res.arrayBuffer();
     const parsed = parseExport(buf);
     
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.js:56',message:'fetchNodeData parsed',data:{mac,limit,offset,itemsCount:parsed.items?.length,footerCount:parsed.footer.count,lastId:parsed.footer.lastId,firstRecordId:parsed.items?.[0]?.recordId,lastRecordId:parsed.items?.[parsed.items?.length-1]?.recordId,hasMore:parsed.footer.count===limit},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
+    
     // Return structure compatible with existing code
     return {
       items: parsed.items,
-      total: parsed.footer.count,
+      total: parsed.footer.totalRecordsForMac || parsed.footer.count, // Use totalRecordsForMac if available
       hasMore: parsed.footer.count === limit,
       lastId: parsed.footer.lastId
     };

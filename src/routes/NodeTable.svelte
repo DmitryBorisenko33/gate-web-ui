@@ -208,10 +208,10 @@
     {#if hasMore}
       <div class="mt-4">
         <Button
-          on:click={loadMore}
-          disabled={loading}
-        >
-          {loading ? 'Loading...' : 'Load Older'}
+        on:click={loadMore}
+        disabled={loading}
+      >
+        {loading ? 'Loading...' : 'Load Older'}
         </Button>
       </div>
     {/if}
