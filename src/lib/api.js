@@ -7,7 +7,7 @@ function getGateIP() {
     const envIP = import.meta.env.VITE_GATE_IP;
     if (envIP) return envIP;
     // Default gate IP for development
-    return '192.168.88.77';
+    return '192.168.88.81';
   }
   // In production, always use current hostname (the gate's IP when served from the gate)
   // window.location.hostname will be the IP of the ESP32 gate
@@ -408,4 +408,3 @@ export async function findAvailableDates(mac, meta) {
     return [];
   }
 }
-

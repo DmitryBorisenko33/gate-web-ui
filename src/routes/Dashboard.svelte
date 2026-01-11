@@ -1,9 +1,17 @@
 <script>
   import { onMount } from 'svelte';
+  import { push } from 'svelte-spa-router';
   import { fetchNodes } from '../lib/api.js';
   import { formatTs, formatValue } from '../lib/utils.js';
-
-  export let navigate;
+  import {
+    PageTitle,
+    LoadingSpinner,
+    ErrorMessage,
+    EmptyState,
+    Card,
+    Button,
+    Grid
+  } from '../components/ui';
 
   let nodes = [];
   let loading = true;
@@ -27,61 +35,104 @@
   function handleTableClick(mac, sensorTypeId, event) {
     event.stopPropagation();
     console.log('[Dashboard] Navigate to table:', { mac, deviceId: sensorTypeId });
-    navigate('table', { mac, deviceId: sensorTypeId });
+    push(`/table/${mac}/${sensorTypeId}`);
   }
 
   function handleGraphClick(mac, sensorTypeId, event) {
     event.stopPropagation();
     console.log('[Dashboard] Navigate to graph:', { mac, deviceId: sensorTypeId });
-    navigate('graph', { mac, deviceId: sensorTypeId });
+    push(`/graph/${mac}/${sensorTypeId}`);
   }
 </script>
 
-<div class="min-h-screen bg-[#0b1220] text-[#c6d1f0] p-4">
-  <h1 class="text-2xl font-bold mb-4">Gate Dashboard</h1>
+<div class="dashboard-container">
+  <PageTitle>Gate Dashboard</PageTitle>
 
   {#if loading}
-    <div class="text-center py-8">Loading...</div>
+    <LoadingSpinner text="Loading nodes..." />
   {:else if error}
-    <div class="text-red-400 py-8">Error: {error}</div>
+    <ErrorMessage message={error} />
   {:else if nodes.length === 0}
-    <div class="text-center py-8">No nodes found</div>
+    <EmptyState message="No nodes found" />
   {:else}
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <Grid columns={3} gap="medium">
       {#each nodes as node}
-        <div class="bg-[#111a2f] border border-[#1f2b4b] rounded-lg p-4 hover:border-[#2f6df6] transition">
-          <div class="font-semibold text-lg mb-2">{node.mac}</div>
+        <Card hover={true}>
+          <div class="node-mac">{node.mac}</div>
           {#if node.latest}
-            <div class="text-sm text-[#9fb0e6] mb-2">
+            <div class="node-last-update">
               Last: {formatTs(node.latest.sampleTsMs)}
             </div>
             {#if node.latest.values}
-              <div class="space-y-1 mb-3">
+              <div class="node-values">
                 {#each Object.entries(node.latest.values) as [key, value]}
-                  <div class="text-sm">
-                    <span class="text-[#9fb0e6]">{key}:</span> {formatValue(value)}
+                  <div class="node-value-item">
+                    <span class="node-value-key">{key}:</span> {formatValue(value)}
                   </div>
                 {/each}
               </div>
             {/if}
           {/if}
-          <div class="flex gap-2 mt-3">
-            <button
-              class="flex-1 px-3 py-2 bg-[#2f6df6] rounded hover:bg-[#1e4fc4] transition text-sm font-medium"
+          <div class="node-actions">
+            <Button
+              size="small"
+              fullWidth={true}
               on:click={(e) => handleTableClick(node.mac, node.sensorTypeId, e)}
             >
               Table
-            </button>
-            <button
-              class="flex-1 px-3 py-2 bg-[#2f6df6] rounded hover:bg-[#1e4fc4] transition text-sm font-medium"
+            </Button>
+            <Button
+              size="small"
+              fullWidth={true}
               on:click={(e) => handleGraphClick(node.mac, node.sensorTypeId, e)}
             >
               Graph
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       {/each}
-    </div>
+    </Grid>
   {/if}
 </div>
 
+<style>
+  .dashboard-container {
+    min-height: 100%;
+    padding: 0;
+  }
+
+  .node-mac {
+    font-weight: 600;
+    font-size: 1.125rem;
+    margin-bottom: 0.5rem;
+    color: #c6d1f0;
+    word-break: break-all;
+  }
+
+  .node-last-update {
+    font-size: 0.875rem;
+    color: #9fb0e6;
+    margin-bottom: 0.5rem;
+  }
+
+  .node-values {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .node-value-item {
+    font-size: 0.875rem;
+  }
+
+  .node-value-key {
+    color: #9fb0e6;
+  }
+
+  .node-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+</style>

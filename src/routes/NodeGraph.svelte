@@ -21,11 +21,18 @@
     return LucideIcons[componentName] || LucideIcons.TrendingUp;
   }
 
-  export let navigate;
-  export let params = {};
+  import { location, push } from 'svelte-spa-router';
+  import {
+    PageTitle,
+    Button,
+    ErrorMessage,
+    LoadingSpinner
+  } from '../components/ui';
 
-  const mac = params.mac || '';
-  const deviceId = params.deviceId || '';
+  // Get route parameters from URL
+  $: routeParts = $location.split('/').filter(p => p);
+  $: mac = routeParts[1] || '';
+  $: deviceId = routeParts[2] || '';
 
   console.log('[NodeGraph] Mounted with params:', { mac, deviceId });
 
@@ -374,26 +381,19 @@
   }
 </script>
 
-<div class="min-h-screen bg-[#0b1220] text-[#c6d1f0] p-4">
+<div class="node-graph-container">
   <div class="mb-4">
-    <button
-      class="px-4 py-2 bg-[#2f6df6] rounded hover:bg-[#1e4fc4]"
-      on:click={() => navigate('dashboard')}
-    >
+    <Button variant="secondary" size="small" on:click={() => push('/dashboard')}>
       ← Dashboard
-    </button>
+    </Button>
   </div>
 
-  <h1 class="text-2xl font-bold mb-4">Node {mac} - Graph</h1>
+  <PageTitle>Node {mac} - Graph</PageTitle>
 
-  {#if error}
-    <div class="text-red-400 mb-4">Error: {error}</div>
-  {/if}
+  <ErrorMessage message={error} />
 
   {#if loading && !schema}
-    <div class="text-center py-8">Loading schema...</div>
-  {:else if error}
-    <div class="text-red-400 mb-4">Error: {error}</div>
+    <LoadingSpinner text="Loading schema..." />
   {:else if schema}
     <div class="mb-4 flex gap-2 flex-wrap">
       {#each schema.fields as field}
@@ -411,29 +411,27 @@
     </div>
 
     <!-- Постраничная навигация: влево старее, вправо новее -->
-    <div class="mb-4 flex items-center justify-center gap-4">
-      <button
-        class="px-4 py-2 bg-[#2f6df6] rounded hover:bg-[#1e4fc4] transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+    <div class="mb-4 pagination">
+      <Button
         on:click={prevPage}
         disabled={pageIndex >= totalPages - 1}
         title="Более старые записи"
       >
         ←
-      </button>
-      <div class="text-lg font-semibold min-w-[160px] text-center">
+      </Button>
+      <div class="pagination-info">
         Страница {pageIndex + 1} / {totalPages}
       </div>
-      <button
-        class="px-4 py-2 bg-[#2f6df6] rounded hover:bg-[#1e4fc4] transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+      <Button
         on:click={nextPage}
         disabled={pageIndex === 0}
         title="Более новые записи"
       >
         →
-      </button>
+      </Button>
     </div>
 
-    <div class="bg-[#111a2f] border border-[#1f2b4b] rounded-lg p-4 relative" style="height: 500px;">
+    <div class="chart-container">
       {#if loading}
         <div class="absolute inset-0 flex items-center justify-center">
           <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#2f6df6]"></div>
@@ -449,4 +447,51 @@
     <div class="text-center py-8">Loading schema...</div>
   {/if}
 </div>
+
+<style>
+  .node-graph-container {
+    min-height: 100%;
+    padding: 0;
+  }
+
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+  }
+
+  .pagination-info {
+    font-size: 1.125rem;
+    font-weight: 600;
+    min-width: 160px;
+    text-align: center;
+    color: #c6d1f0;
+  }
+
+  .chart-container {
+    background: #111a2f;
+    border: 1px solid #1f2b4b;
+    border-radius: 8px;
+    padding: 1rem;
+    position: relative;
+    height: 500px;
+  }
+
+  /* Mobile styles */
+  @media (max-width: 767px) {
+    h1 {
+      font-size: 1.25rem;
+    }
+
+    .chart-container {
+      height: 400px;
+      padding: 0.75rem;
+    }
+
+    canvas {
+      max-width: 100%;
+    }
+  }
+</style>
 

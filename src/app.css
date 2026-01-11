@@ -2,8 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
+html, body {
   margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
@@ -11,6 +18,10 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: #0b1220;
   color: #c6d1f0;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 

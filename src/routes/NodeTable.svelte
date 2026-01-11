@@ -1,14 +1,20 @@
 <script>
   import { onMount } from 'svelte';
+  import { location, push } from 'svelte-spa-router';
   import { fetchNodeData, fetchSchema } from '../lib/api.js';
   import { formatTs, formatValue } from '../lib/utils.js';
   import { decodePayload } from '../lib/payload-decoder.js';
+  import {
+    PageTitle,
+    Button,
+    ErrorMessage,
+    LoadingSpinner
+  } from '../components/ui';
 
-  export let navigate;
-  export let params = {};
-
-  const mac = params.mac || '';
-  const deviceId = params.deviceId || '';
+  // Get route parameters from URL
+  $: routeParts = $location.split('/').filter(p => p);
+  $: mac = routeParts[1] || '';
+  $: deviceId = routeParts[2] || '';
 
   console.log('[NodeTable] Mounted with params:', { mac, deviceId });
 
@@ -135,33 +141,25 @@
   });
 </script>
 
-<div class="min-h-screen bg-[#0b1220] text-[#c6d1f0] p-4">
+<div class="node-table-container">
   <div class="mb-4">
-    <button
-      class="px-4 py-2 bg-[#2f6df6] rounded hover:bg-[#1e4fc4]"
-      on:click={() => navigate('dashboard')}
-    >
+    <Button variant="secondary" size="small" on:click={() => push('/dashboard')}>
       ← Dashboard
-    </button>
+    </Button>
   </div>
 
-  <h1 class="text-2xl font-bold mb-4">Node {mac}</h1>
+  <PageTitle>Node {mac}</PageTitle>
 
-  {#if error}
-    <div class="text-red-400 mb-4">Error: {error}</div>
-  {/if}
+  <ErrorMessage message={error} />
 
   <div class="mb-4 text-sm text-[#9fb0e6]">
     Debug: schema={schema ? 'yes' : 'no'}, columns={columns.length}, rows={rows.length}, loading={loading}, deviceId={deviceId}, mac={mac}
   </div>
 
   {#if loading && rows.length === 0 && !schema}
-    <div class="text-center py-8">Loading schema and data...</div>
+    <LoadingSpinner text="Loading schema and data..." />
   {:else if !schema}
-    <div class="text-center py-8">
-      <div>Loading schema...</div>
-      <div class="text-sm text-[#9fb0e6] mt-2">deviceId: {deviceId || 'missing'}</div>
-    </div>
+    <LoadingSpinner text="Loading schema..." />
   {:else if schema && columns.length === 0}
     <div class="text-center py-8">
       <div>Schema loaded but no columns</div>
@@ -208,16 +206,75 @@
     {/if}
 
     {#if hasMore}
-      <button
-        class="mt-4 px-4 py-2 bg-[#2f6df6] rounded hover:bg-[#1e4fc4]"
-        on:click={loadMore}
-        disabled={loading}
-      >
-        {loading ? 'Loading...' : 'Load Older'}
-      </button>
+      <div class="mt-4">
+        <Button
+          on:click={loadMore}
+          disabled={loading}
+        >
+          {loading ? 'Loading...' : 'Load Older'}
+        </Button>
+      </div>
     {/if}
   {:else}
     <div class="text-center py-8">Loading schema...</div>
   {/if}
 </div>
+
+<style>
+  .node-table-container {
+    min-height: 100%;
+    padding: 0;
+  }
+
+  .overflow-x-auto {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  thead tr {
+    border-bottom: 1px solid #1f2b4b;
+  }
+
+  th {
+    padding: 0.5rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: #c6d1f0;
+    white-space: nowrap;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid #111a2f;
+  }
+
+  td {
+    padding: 0.5rem 1rem;
+    color: #c6d1f0;
+    word-break: break-word;
+  }
+
+  /* Mobile: make table scrollable horizontally */
+  @media (max-width: 767px) {
+    .overflow-x-auto {
+      display: block;
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    table {
+      min-width: 600px;
+    }
+
+    th, td {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8125rem;
+    }
+  }
+</style>
 
