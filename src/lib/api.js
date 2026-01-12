@@ -40,8 +40,11 @@ export async function fetchNodeData(mac, limit = 200, offset = 0) {
     // #region agent log
     fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.js:38',message:'fetchNodeData entry',data:{mac,limit,offset},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
     // #endregion
+    const safeLimit = Math.max(0, Number(limit) || 0);
+    const safeOffset = Math.max(0, Number(offset) || 0);
+
     // Do not encode ':' so it matches /api/nodes/<mac>/data on the gate
-    const url = `${API_BASE}/nodes/${mac}/data?limit=${limit}&offset=${offset}`;
+    const url = `${API_BASE}/nodes/${mac}/data?limit=${safeLimit}&offset=${safeOffset}`;
     console.log('[API] Fetching node data from:', url);
     const res = await fetch(url, {
       headers: {
@@ -53,20 +56,23 @@ export async function fetchNodeData(mac, limit = 200, offset = 0) {
       const text = await res.text();
       throw new Error(`GET /api/nodes/${mac}/data failed: ${res.status} - ${text}`);
     }
-    
+
     // Get binary data
     const buf = await res.arrayBuffer();
     const parsed = parseExport(buf);
-    
+
+    const total = parsed.footer.totalRecordsForMac || parsed.footer.count;
+    const hasMore = (safeOffset + parsed.footer.count) < total;
+
     // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.js:56',message:'fetchNodeData parsed',data:{mac,limit,offset,itemsCount:parsed.items?.length,footerCount:parsed.footer.count,lastId:parsed.footer.lastId,firstRecordId:parsed.items?.[0]?.recordId,lastRecordId:parsed.items?.[parsed.items?.length-1]?.recordId,hasMore:parsed.footer.count===limit},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.js:56',message:'fetchNodeData parsed',data:{mac,limit:safeLimit,offset:safeOffset,itemsCount:parsed.items?.length,footerCount:parsed.footer.count,lastId:parsed.footer.lastId,firstRecordId:parsed.items?.[0]?.recordId,lastRecordId:parsed.items?.[parsed.items?.length-1]?.recordId,hasMore,total},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
     // #endregion
-    
+
     // Return structure compatible with existing code
     return {
       items: parsed.items,
-      total: parsed.footer.totalRecordsForMac || parsed.footer.count, // Use totalRecordsForMac if available
-      hasMore: parsed.footer.count === limit,
+      total,
+      hasMore,
       lastId: parsed.footer.lastId
     };
   } catch (e) {
