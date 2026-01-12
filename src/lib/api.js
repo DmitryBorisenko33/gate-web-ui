@@ -16,18 +16,23 @@ function getGateIP() {
 
 const API_BASE = `http://${getGateIP()}:8081/api`;
 
-console.log('[API] Base URL:', API_BASE);
+// Debug logging (disabled in production build)
+const DEV_LOG = import.meta.env.DEV;
+const log = (...args) => { if (DEV_LOG) console.log(...args); };
+const warn = (...args) => { if (DEV_LOG) console.warn(...args); };
+
+log('[API] Base URL:', API_BASE);
 
 export async function fetchNodes() {
   try {
-    console.log('[API] Fetching nodes from:', `${API_BASE}/nodes`);
+    log('[API] Fetching nodes from:', `${API_BASE}/nodes`);
     const res = await fetch(`${API_BASE}/nodes`);
     if (!res.ok) {
       const text = await res.text();
       throw new Error(`GET /api/nodes failed: ${res.status} - ${text}`);
     }
     const data = await res.json();
-    console.log('[API] Nodes response:', data);
+    log('[API] Nodes response:', data);
     return data;
   } catch (e) {
     console.error('[API] fetchNodes error:', e);
@@ -37,15 +42,12 @@ export async function fetchNodes() {
 
 export async function fetchNodeData(mac, limit = 200, offset = 0) {
   try {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.js:38',message:'fetchNodeData entry',data:{mac,limit,offset},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
     const safeLimit = Math.max(0, Number(limit) || 0);
     const safeOffset = Math.max(0, Number(offset) || 0);
 
     // Do not encode ':' so it matches /api/nodes/<mac>/data on the gate
     const url = `${API_BASE}/nodes/${mac}/data?limit=${safeLimit}&offset=${safeOffset}`;
-    console.log('[API] Fetching node data from:', url);
+    log('[API] Fetching node data from:', url);
     const res = await fetch(url, {
       headers: {
         Accept: 'application/octet-stream',
@@ -64,10 +66,6 @@ export async function fetchNodeData(mac, limit = 200, offset = 0) {
     const total = parsed.footer.totalRecordsForMac || parsed.footer.count;
     const hasMore = (safeOffset + parsed.footer.count) < total;
 
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.js:56',message:'fetchNodeData parsed',data:{mac,limit:safeLimit,offset:safeOffset,itemsCount:parsed.items?.length,footerCount:parsed.footer.count,lastId:parsed.footer.lastId,firstRecordId:parsed.items?.[0]?.recordId,lastRecordId:parsed.items?.[parsed.items?.length-1]?.recordId,hasMore,total},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
-
     // Return structure compatible with existing code
     return {
       items: parsed.items,
@@ -85,7 +83,7 @@ export async function fetchNodeLatest(mac) {
   try {
     // Do not encode ':' so it matches /api/nodes/<mac>/latest on the gate
     const url = `${API_BASE}/nodes/${mac}/latest`;
-    console.log('[API] Fetching node latest from:', url);
+    log('[API] Fetching node latest from:', url);
     const res = await fetch(url);
     if (!res.ok) {
       const text = await res.text();
@@ -102,7 +100,7 @@ export async function deleteNode(mac) {
   try {
     // Do not encode ':' so it matches /api/nodes/<mac> on the gate
     const url = `${API_BASE}/nodes/${mac}`;
-    console.log('[API] Deleting node:', url);
+    log('[API] Deleting node:', url);
     const res = await fetch(url, {
       method: 'DELETE',
     });
@@ -120,7 +118,7 @@ export async function deleteNode(mac) {
 export async function fetchSchema(sensorTypeId) {
   try {
     const url = `${API_BASE}/schema?type=${sensorTypeId}`;
-    console.log('[API] Fetching schema from:', url);
+    log('[API] Fetching schema from:', url);
     const res = await fetch(url);
     if (!res.ok) {
       const text = await res.text();
@@ -137,7 +135,7 @@ export async function fetchSchema(sensorTypeId) {
 export async function fetchMeta() {
   try {
     const url = `${API_BASE}/meta`;
-    console.log('[API] Fetching meta from:', url);
+    log('[API] Fetching meta from:', url);
     const res = await fetch(url);
     if (!res.ok) {
       const text = await res.text();
@@ -153,7 +151,7 @@ export async function fetchMeta() {
 export async function fetchSystem() {
   try {
     const url = `${API_BASE}/system`;
-    console.log('[API] Fetching system info from:', url);
+    log('[API] Fetching system info from:', url);
     const res = await fetch(url);
     if (!res.ok) {
       const text = await res.text();
@@ -169,7 +167,7 @@ export async function fetchSystem() {
 export async function resetGate() {
   try {
     const url = `${API_BASE}/admin/reset`;
-    console.log('[API] Reset gate via:', url);
+    log('[API] Reset gate via:', url);
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -226,7 +224,7 @@ export function calculateDayRecordRange(selectedDate, headId, intervalMs, nowMs,
 
   // Ограничиваем sinceId по старейшему индексу базы, если он известен
   if (typeof oldestId === 'number' && oldestId > 0 && sinceId < oldestId) {
-    console.warn('[API] Обнаружен неполный день: sinceId ниже oldest_id, сдвигаю up', {
+    warn('[API] Обнаружен неполный день: sinceId ниже oldest_id, сдвигаю up', {
       oldestId,
       calculatedSince: sinceId,
     });
@@ -240,7 +238,7 @@ export function calculateDayRecordRange(selectedDate, headId, intervalMs, nowMs,
     untilId = sinceId + 1;
   }
 
-  console.log('[API] calculateDayRecordRange:', {
+  log('[API] calculateDayRecordRange:', {
     selectedDate: selectedDate.toISOString(),
     dayStart: dayStart.toISOString(),
     dayEnd: dayEnd.toISOString(),
@@ -258,7 +256,7 @@ export function calculateDayRecordRange(selectedDate, headId, intervalMs, nowMs,
   // Ensure sinceId < untilId for range (since_id, until_id]
   // since_id is the lower bound (older), until_id is the upper bound (newer)
   if (sinceId >= untilId) {
-    console.warn('[API] Invalid range: sinceId >= untilId', { sinceId, untilId });
+    warn('[API] Invalid range: sinceId >= untilId', { sinceId, untilId });
     return { sinceId: headId, untilId: headId }; // Empty range
   }
   
@@ -289,7 +287,7 @@ export async function fetchNodeDataForDay(mac, selectedDate, meta) {
     const dayEndDate = new Date(selectedDate);
     dayEndDate.setHours(23, 59, 59, 999);
     
-    console.log('[API] Fetching data for day:', { 
+    log('[API] Fetching data for day:', { 
       date: selectedDate.toISOString(),
       dayStart: dayStartDate.toISOString(),
       dayEnd: dayEndDate.toISOString(),
@@ -363,7 +361,7 @@ export async function findAvailableDates(mac, meta) {
       oldestId > 0 ? oldestId : headId // Oldest
     ];
     
-    console.log('[API] Finding available dates, sampling at points:', samplePoints);
+    log('[API] Finding available dates, sampling at points:', samplePoints);
     
     // For each sample point, request a small range and calculate dates
     for (const sampleId of samplePoints) {
@@ -378,7 +376,7 @@ export async function findAvailableDates(mac, meta) {
       
       try {
         const url = `${API_BASE}/nodes/${mac}/data?since=${sinceId}&until=${untilId}`;
-        console.log('[API] Sampling dates from range:', { sinceId, untilId, sampleId });
+        log('[API] Sampling dates from range:', { sinceId, untilId, sampleId });
         const res = await fetch(url, {
           headers: {
             Accept: 'application/octet-stream',
@@ -412,7 +410,7 @@ export async function findAvailableDates(mac, meta) {
           }
         }
       } catch (e) {
-        console.warn('[API] Error sampling dates at', sampleId, e);
+        warn('[API] Error sampling dates at', sampleId, e);
         // Continue with other samples
       }
     }
@@ -430,7 +428,7 @@ export async function findAvailableDates(mac, meta) {
       })
       .sort((a, b) => b.getTime() - a.getTime()); // Sort descending (newest first)
     
-    console.log('[API] Found available dates:', dates.length, dates.map(d => {
+    log('[API] Found available dates:', dates.length, dates.map(d => {
       const localDate = new Date(d);
       return `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
     }));

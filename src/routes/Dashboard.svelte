@@ -18,13 +18,17 @@
   let error = null;
   let deletingMac = null; // Track which node is being deleted
 
+  // Debug logging (disabled in production build)
+  const DEV_LOG = import.meta.env.DEV;
+  const log = (...args) => { if (DEV_LOG) console.log(...args); };
+
   onMount(async () => {
     try {
       loading = true;
       error = null;
-      console.log('[Dashboard] Fetching nodes...');
+      log('[Dashboard] Fetching nodes...');
       nodes = await fetchNodes();
-      console.log('[Dashboard] Nodes loaded:', nodes);
+      log('[Dashboard] Nodes loaded:', nodes);
     } catch (e) {
       error = e.message || String(e);
       console.error('[Dashboard] Error loading nodes:', e);
@@ -35,13 +39,13 @@
 
   function handleTableClick(mac, sensorTypeId, event) {
     event.stopPropagation();
-    console.log('[Dashboard] Navigate to table:', { mac, deviceId: sensorTypeId });
+    log('[Dashboard] Navigate to table:', { mac, deviceId: sensorTypeId });
     push(`/table/${mac}/${sensorTypeId}`);
   }
 
   function handleGraphClick(mac, sensorTypeId, event) {
     event.stopPropagation();
-    console.log('[Dashboard] Navigate to graph:', { mac, deviceId: sensorTypeId });
+    log('[Dashboard] Navigate to graph:', { mac, deviceId: sensorTypeId });
     push(`/graph/${mac}/${sensorTypeId}`);
   }
 
@@ -58,7 +62,7 @@
       await deleteNode(mac);
       // Remove node from local list
       nodes = nodes.filter(n => n.mac !== mac);
-      console.log('[Dashboard] Node deleted:', mac);
+      log('[Dashboard] Node deleted:', mac);
     } catch (e) {
       error = e.message || String(e);
       console.error('[Dashboard] Error deleting node:', e);

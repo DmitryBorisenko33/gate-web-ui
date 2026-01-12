@@ -34,7 +34,12 @@
   $: mac = routeParts[1] || '';
   $: deviceId = routeParts[2] || '';
 
-  console.log('[NodeGraph] Mounted with params:', { mac, deviceId });
+  // Debug logging (disabled in production build)
+  const DEV_LOG = import.meta.env.DEV;
+  const log = (...args) => { if (DEV_LOG) console.log(...args); };
+  const warn = (...args) => { if (DEV_LOG) console.warn(...args); };
+
+  log('[NodeGraph] Mounted with params:', { mac, deviceId });
 
   let schema = null;
   let chart = null;
@@ -58,7 +63,7 @@
   let intervalMs = 0;
 
   onMount(async () => {
-    console.log('[NodeGraph] Пользователь открыл график');
+    log('[NodeGraph] Пользователь открыл график');
     
     await loadSchema();
     // Load meta first to get interval_ms and head_id
@@ -78,7 +83,7 @@
         second: '2-digit',
         hour12: false
       });
-      console.log('[NodeGraph] Сейчас такое время:', currentTimeStr, `(${currentTime.toISOString()})`);
+      log('[NodeGraph] Сейчас такое время:', currentTimeStr, `(${currentTime.toISOString()})`);
       
       if (intervalMs === 0) {
         error = 'Cannot calculate time range: interval_ms is 0. Please use mobile app for this device.';
@@ -100,7 +105,7 @@
         second: '2-digit',
         hour12: false
       });
-      console.log('[NodeGraph] Считаю время старейшее в базе (oldest_id=' + meta.oldest_id + '):', oldestTimeStr, `(${oldestTime.toISOString()})`);
+      log('[NodeGraph] Считаю время старейшее в базе (oldest_id=' + meta.oldest_id + '):', oldestTimeStr, `(${oldestTime.toISOString()})`);
       
     } catch (e) {
       console.error('[NodeGraph] Error loading meta:', e);
@@ -137,10 +142,6 @@
       loading = true;
       error = null;
 
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:127',message:'loadPage entry',data:{pageIdx,hasMac:!!mac,hasSchema:!!schema,hasMeta:!!meta,selectedFieldsCount:selectedFields.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
-
       // Обновляем meta перед запросом
       meta = await fetchMeta();
       intervalMs = meta.interval_ms || 0;
@@ -158,33 +159,18 @@
       // Calculate hours per page (should be ~24 hours)
       const hoursPerPage = (pageSize * intervalMs) / (1000 * 60 * 60);
 
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:162',message:'loadPage before fetch',data:{head_id:meta.head_id,oldest_id:meta.oldest_id,currentTotalPages:totalPages,pageSize,intervalMs,hoursPerPage,requestedPageIdx:pageIdx},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
-
       // Клайп pageIdx в допустимые границы
       if (pageIdx < 0) pageIdx = 0;
       if (pageIdx > totalPages - 1) pageIdx = totalPages - 1;
       pageIndex = pageIdx;
 
       const offset = pageIndex * pageSize;
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:184',message:'before fetchNodeData',data:{pageIndex,offset,pageSize,mac},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
 
       const data = await fetchNodeData(mac, pageSize, offset);
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:190',message:'after fetchNodeData',data:{pageIndex,offset,itemsCount:data.items?.length,hasMore:data.hasMore,total:data.total,lastId:data.lastId,firstRecordId:data.items?.[0]?.recordId,lastRecordId:data.items?.[data.items?.length-1]?.recordId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       
       // Calculate totalPages from total records for this MAC (from first request)
       if (data.total && data.total > 0) {
         totalPages = Math.max(1, Math.ceil(data.total / pageSize));
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:196',message:'totalPages calculated from API',data:{totalRecords:data.total,pageSize,totalPages},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
       }
       
       // Adjust totalPages based on actual API response (fallback if total not available)
@@ -193,30 +179,21 @@
         // No data on this page - this page is beyond available data
         // Last page with data was pageIndex - 1, so totalPages = pageIndex
         totalPages = Math.max(1, pageIndex);
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:198',message:'adjusting totalPages - no data on page',data:{pageIndex,newTotalPages:totalPages,itemsCount:0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
       } else if (!data.hasMore) {
         // No more data available - this is the last page with data
         // pageIndex is 0-based, so if pageIndex=4 is last, totalPages should be 5 (pages 0,1,2,3,4)
         totalPages = pageIndex + 1;
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:204',message:'adjusting totalPages - last page (hasMore=false)',data:{pageIndex,hasMore:data.hasMore,itemsCount:data.items?.length,newTotalPages:totalPages},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
       } else if (data.hasMore) {
         // There's more data available
         // If we're at or beyond current totalPages estimate, increase it
         if (pageIndex >= totalPages - 1) {
           totalPages = pageIndex + 2; // At least one more page
-          // #region agent log
-          fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:212',message:'adjusting totalPages - more data available',data:{pageIndex,hasMore:data.hasMore,itemsCount:data.items?.length,newTotalPages:totalPages},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
         }
         // Ensure totalPages is at least pageIndex + 1 (current page + at least one more)
         totalPages = Math.max(totalPages, pageIndex + 1);
       }
 
-      console.log('[NodeGraph] Загружена страница:', { pageIndex, offset, items: data.items?.length });
+      log('[NodeGraph] Загружена страница:', { pageIndex, offset, items: data.items?.length });
 
       // Декодируем payload
       const rawItems = (data.items || []).map(item => {
@@ -233,7 +210,7 @@
         };
       }).sort((a, b) => a.recordId - b.recordId);
 
-      console.log('[NodeGraph] Начинаю расчет времени для', rawItems.length, 'записей');
+      log('[NodeGraph] Начинаю расчет времени для', rawItems.length, 'записей');
 
       // Anchor: newest запись этой страницы относительно head_id
       const newestRecordId = rawItems.length > 0 ? Math.max(...rawItems.map(item => item.recordId)) : 0;
@@ -244,17 +221,13 @@
         anchorTime = nowMs - recordsFromHead * intervalMs;
       }
 
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:175',message:'time reconstruction anchor',data:{pageIndex,newestRecordId,oldestRecordId,head_id:meta.head_id,recordsFromHead:meta.head_id-newestRecordId,anchorTime:new Date(anchorTime).toISOString(),nowMs:new Date(nowMs).toISOString(),intervalMs},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
-
       const items = [];
 
       if (rawItems.length > 0 && intervalMs > 0) {
         const sortedDesc = [...rawItems].sort((a, b) => b.recordId - a.recordId);
         let currentTime = anchorTime;
 
-        console.log('[NodeGraph] Расчет времени записей (страница):', {
+        log('[NodeGraph] Расчет времени записей (страница):', {
           anchorTime: new Date(anchorTime).toISOString(),
           totalItems: sortedDesc.length,
           firstRecordId: sortedDesc[0]?.recordId ?? null,
@@ -285,14 +258,14 @@
 
         items.sort((a, b) => a.sampleTsMs - b.sampleTsMs);
 
-        console.log('[NodeGraph] По логу с какого времени по какое построен график:');
+        log('[NodeGraph] По логу с какого времени по какое построен график:');
         if (items.length > 0) {
           const firstTime = new Date(items[0].sampleTsMs);
           const lastTime = new Date(items[items.length - 1].sampleTsMs);
-          console.log('  От:', firstTime.toISOString());
-          console.log('  До:', lastTime.toISOString());
+          log('  От:', firstTime.toISOString());
+          log('  До:', lastTime.toISOString());
         } else {
-          console.log('  Нет данных для отображения');
+          log('  Нет данных для отображения');
         }
       } else if (rawItems.length > 0) {
         // fallback по dt_ms
@@ -326,29 +299,22 @@
   }
 
   function updateChart(items) {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:301',message:'updateChart entry',data:{hasChartCanvas:!!chartCanvas,hasSchema:!!schema,itemsCount:items?.length,selectedFieldsCount:selectedFields?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-    // #endregion
-    
     if (!chartCanvas || !schema) {
-      console.log('[NodeGraph] Cannot update chart:', { chartCanvas: !!chartCanvas, schema: !!schema });
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:303',message:'updateChart blocked',data:{hasChartCanvas:!!chartCanvas,hasSchema:!!schema},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-      // #endregion
+      log('[NodeGraph] Cannot update chart:', { chartCanvas: !!chartCanvas, schema: !!schema });
       return;
     }
 
     if (items.length === 0) {
-      console.log('[NodeGraph] No items to display');
+      log('[NodeGraph] No items to display');
       return;
     }
 
-    console.log('[NodeGraph] Updating chart with', items.length, 'items, selectedFields:', selectedFields);
+    log('[NodeGraph] Updating chart with', items.length, 'items, selectedFields:', selectedFields);
 
     const datasets = selectedFields.map((fieldKey, idx) => {
       const field = schema.fields.find(f => f.key === fieldKey);
       if (!field) {
-        console.warn('[NodeGraph] Field not found:', fieldKey);
+        warn('[NodeGraph] Field not found:', fieldKey);
         return null;
       }
 
@@ -361,7 +327,7 @@
         y: item.values?.[fieldKey] || 0,
       })).filter(d => d.x > 0); // Filter out invalid timestamps
 
-      console.log('[NodeGraph] Dataset for', fieldKey, ':', data.length, 'points');
+      log('[NodeGraph] Dataset for', fieldKey, ':', data.length, 'points');
 
       return {
         label: field.label || field.key,
@@ -380,20 +346,13 @@
     }).filter(Boolean);
 
     if (datasets.length === 0) {
-      console.warn('[NodeGraph] No valid datasets');
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:348',message:'updateChart no datasets',data:{itemsCount:items?.length,selectedFields,datasetsLength:datasets.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-      // #endregion
+      warn('[NodeGraph] No valid datasets');
       return;
     }
 
     if (chart) {
       chart.destroy();
     }
-
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:357',message:'updateChart creating chart',data:{datasetsCount:datasets.length,chartCanvasExists:!!chartCanvas},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-    // #endregion
 
     chart = new Chart(chartCanvas, {
       type: 'line',
@@ -445,10 +404,7 @@
       },
     });
 
-    console.log('[NodeGraph] Chart created successfully');
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:416',message:'updateChart chart created',data:{chartExists:!!chart,datasetsCount:datasets.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-    // #endregion
+    log('[NodeGraph] Chart created successfully');
   }
 
   function toggleField(fieldKey) {
@@ -465,18 +421,12 @@
 
   // Переход к более старой странице
   async function prevPage() {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:366',message:'prevPage called',data:{currentPageIndex:pageIndex,totalPages,willLoadPage:pageIndex+1,canLoad:pageIndex<totalPages-1},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     if (pageIndex >= totalPages - 1) return;
     await loadPage(pageIndex + 1);
   }
 
   // Переход к более новой странице
   async function nextPage() {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/ca4f2af1-1a02-4219-869c-f5832180426e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NodeGraph.svelte:373',message:'nextPage called',data:{currentPageIndex:pageIndex,totalPages,willLoadPage:pageIndex-1,canLoad:pageIndex>0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     if (pageIndex <= 0) return;
     await loadPage(pageIndex - 1);
   }
@@ -590,10 +540,6 @@
 
   /* Mobile styles */
   @media (max-width: 767px) {
-    h1 {
-      font-size: 1.25rem;
-    }
-
     .chart-container {
       height: 400px;
       padding: 0.75rem;

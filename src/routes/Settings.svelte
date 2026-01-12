@@ -26,7 +26,6 @@
   async function loadSystemInfo() {
     try {
       const data = await fetchSystem();
-      console.log('[Settings] System info received:', data);
       systemInfo = data;
       systemLoading = false;
     } catch (e) {
@@ -234,27 +233,6 @@
 
   .status-synced {
     color: #10b981;
-  }
-
-  .debug-info {
-    margin-top: 1rem;
-    padding: 0.75rem;
-    background: rgba(31, 43, 75, 0.3);
-    border-radius: 6px;
-    font-size: 0.75rem;
-  }
-
-  .debug-info summary {
-    cursor: pointer;
-    color: #9fb0e6;
-    margin-bottom: 0.5rem;
-  }
-
-  .debug-info pre {
-    color: #c6d1f0;
-    overflow-x: auto;
-    font-size: 0.75rem;
-    line-height: 1.4;
   }
 
   /* Mobile styles */

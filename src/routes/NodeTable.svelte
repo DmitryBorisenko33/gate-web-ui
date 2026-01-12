@@ -16,7 +16,11 @@
   $: mac = routeParts[1] || '';
   $: deviceId = routeParts[2] || '';
 
-  console.log('[NodeTable] Mounted with params:', { mac, deviceId });
+  // Debug logging (disabled in production build)
+  const DEV_LOG = import.meta.env.DEV;
+  const log = (...args) => { if (DEV_LOG) console.log(...args); };
+
+  log('[NodeTable] Mounted with params:', { mac, deviceId });
 
   let rows = [];
   let schema = null;
@@ -27,7 +31,7 @@
   let hasMore = true;
 
   onMount(async () => {
-    console.log('[NodeTable] onMount, mac:', mac, 'deviceId:', deviceId);
+    log('[NodeTable] onMount, mac:', mac, 'deviceId:', deviceId);
     await loadSchema();
     if (schema) {
       await loadData();
@@ -43,7 +47,7 @@
     if (!deviceId) return;
     try {
       schema = await fetchSchema(deviceId);
-      console.log('[NodeTable] Schema loaded:', schema);
+      log('[NodeTable] Schema loaded:', schema);
     } catch (e) {
       console.error('[NodeTable] Error loading schema:', e);
       error = e.message;
@@ -56,8 +60,8 @@
       loading = true;
       error = null;
       const data = await fetchNodeData(mac, limit, offset);
-      console.log('[NodeTable] Data loaded:', { itemsCount: data.items?.length, hasMore: data.hasMore, offset });
-      console.log('[NodeTable] First item (raw):', data.items?.[0]);
+      log('[NodeTable] Data loaded:', { itemsCount: data.items?.length, hasMore: data.hasMore, offset });
+      log('[NodeTable] First item (raw):', data.items?.[0]);
       
       // Decode payload for each item
       const rawItems = (data.items || []).map(item => {
@@ -96,7 +100,7 @@
         }
       }
       
-      console.log('[NodeTable] First item (decoded):', decodedItems[0]);
+      log('[NodeTable] First item (decoded):', decodedItems[0]);
       
       if (offset === 0) {
         rows = decodedItems;
@@ -104,7 +108,7 @@
         rows = [...rows, ...decodedItems];
       }
       hasMore = data.hasMore || false;
-      console.log('[NodeTable] Rows count:', rows.length);
+      log('[NodeTable] Rows count:', rows.length);
     } catch (e) {
       error = e.message;
       console.error('[NodeTable] Error loading data:', e);
@@ -132,7 +136,7 @@
     { key: 'rssi', label: 'RSSI', isMeta: true },
   ] : [];
   
-  $: console.log('[NodeTable] Reactive update:', { 
+  $: log('[NodeTable] Reactive update:', { 
     schema: !!schema, 
     columnsCount: columns.length, 
     rowsCount: rows.length,
@@ -152,9 +156,11 @@
 
   <ErrorMessage message={error} />
 
-  <div class="mb-4 text-sm text-[#9fb0e6]">
-    Debug: schema={schema ? 'yes' : 'no'}, columns={columns.length}, rows={rows.length}, loading={loading}, deviceId={deviceId}, mac={mac}
-  </div>
+  {#if DEV_LOG}
+    <div class="mb-4 text-sm text-[#9fb0e6]">
+      Debug: schema={schema ? 'yes' : 'no'}, columns={columns.length}, rows={rows.length}, loading={loading}, deviceId={deviceId}, mac={mac}
+    </div>
+  {/if}
 
   {#if loading && rows.length === 0 && !schema}
     <LoadingSpinner text="Loading schema and data..." />
