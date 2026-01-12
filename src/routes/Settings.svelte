@@ -104,6 +104,10 @@
     {:else if systemInfo}
       <div class="info-grid">
         <div class="info-item">
+          <span class="info-label">Прошивка:</span>
+          <span class="info-value">{systemInfo.firmware_name || 'N/A'}</span>
+        </div>
+        <div class="info-item">
           <span class="info-label">Свободная память:</span>
           <span class="info-value">
             {systemInfo.heap?.free ? `${(systemInfo.heap.free / 1024).toFixed(1)} KB` : 'N/A'}
