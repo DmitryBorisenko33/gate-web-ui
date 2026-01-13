@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Web: Build (vite)",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "export PATH=\"/opt/homebrew/bin:$PATH\" && npm run build"
+      ],
+      "options": {
+        "cwd": "/Users/dmitry/Desktop/nrf-esp32-gate/web"
+      },
+      "problemMatcher": [],
+      "group": "build"
+    }
+  ]
+}
